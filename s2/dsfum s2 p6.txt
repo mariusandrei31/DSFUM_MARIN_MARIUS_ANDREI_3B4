@@ -1,0 +1,39 @@
+
+int intensitate = 0;
+int pas = 1;
+int pin = 7;
+
+unsigned long timpStart = 0;
+unsigned long timpPWM = 0;
+
+int perioadaPWM = 2000;
+
+void setup() {
+  pinMode(pin, OUTPUT);
+}
+
+void loop() {
+  if (millis() - timpStart >= 10) {
+    timpStart = millis();
+
+    intensitate += pas;
+
+    if (intensitate >= 255) {
+      intensitate = 255;
+      pas = -1;
+    }
+
+    if (intensitate <= 0) {
+      intensitate = 0;
+      pas = 1;
+    }
+  }
+
+  unsigned long timp = micros() % perioadaPWM;
+  int timpHIGH = intensitate * perioadaPWM / 255;
+
+  if (timp < timpHIGH)
+    digitalWrite(pin, HIGH);
+  else
+    digitalWrite(pin, LOW);
+}

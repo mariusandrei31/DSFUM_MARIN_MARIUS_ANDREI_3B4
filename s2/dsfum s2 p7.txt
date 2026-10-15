@@ -1,0 +1,45 @@
+
+int pini[6] = {8, 9, 10, 11, 12, 13};
+
+int intensitate[6] = {0, 0, 0, 0, 0, 0};
+int pas[6] = {1, 1, 1, 1, 1, 1};
+
+int viteza[6] = {5, 10, 15, 20, 25, 30};
+
+unsigned long timpStart[6] = {0, 0, 0, 0, 0, 0};
+
+int perioadaPWM = 2000;
+
+void setup() {
+  for (int i = 0; i < 6; i++) {
+    pinMode(pini[i], OUTPUT);
+  }
+}
+
+void loop() {
+  for (int i = 0; i < 6; i++) {
+    if (millis() - timpStart[i] >= viteza[i]) {
+      timpStart[i] = millis();
+
+      intensitate[i] += pas[i];
+
+      if (intensitate[i] >= 255) {
+        intensitate[i] = 255;
+        pas[i] = -1;
+      }
+
+      if (intensitate[i] <= 0) {
+        intensitate[i] = 0;
+        pas[i] = 1;
+      }
+    }
+
+    unsigned long timp = micros() % perioadaPWM;
+    int timpHIGH = intensitate[i] * perioadaPWM / 255;
+
+    if (timp < timpHIGH)
+      digitalWrite(pini[i], HIGH);
+    else
+      digitalWrite(pini[i], LOW);
+  }
+}
