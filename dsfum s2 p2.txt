@@ -1,0 +1,24 @@
+void setup() {
+    for(byte i=8; i<=13; i++)
+        pinMode(i, OUTPUT);
+    Serial.begin(9600);
+}
+
+void loop() {
+  int numar,k=7,led[16];
+  if (Serial.available() > 0) {
+    numar = Serial.parseInt(); 
+  
+    Serial.println(numar);
+  }
+  for (int i=8;i<=13 && numar;i++)
+    led[i]=0;
+  while(numar){
+    led[++k]=numar%2;
+    numar/=2;
+  }
+  for(byte i=8;i<=13;i++){
+    delay(500);
+    digitalWrite(i,led[i]);
+  }
+}
