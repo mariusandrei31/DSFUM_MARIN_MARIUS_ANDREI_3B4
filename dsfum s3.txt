@@ -1,0 +1,226 @@
+
+#include <string.h>
+#include <stdlib.h>
+
+const int NR_LEDURI = 6;
+const int PRIMUL_PIN = 8;
+
+enum Animatie {
+  MODE_OFF,
+  FADE_IN,
+  FADE_OUT,
+  FADE_IN_OUT,
+  BLINK
+};
+
+Animatie animatie[NR_LEDURI];
+unsigned long durata[NR_LEDURI];
+unsigned long timpStart[NR_LEDURI];
+int intensitate[NR_LEDURI];
+
+char buffer[50];
+int indexBuffer = 0;
+
+unsigned long ultimulTickPWM = 0;
+const unsigned long INTERVAL_PWM = 32;
+byte fazaPWM = 0;
+
+void setup() {
+  Serial.begin(9600);
+
+  for (int i = 0; i < NR_LEDURI; i++) {
+    pinMode(PRIMUL_PIN + i, OUTPUT);
+    digitalWrite(PRIMUL_PIN + i, LOW);
+
+    animatie[i] = MODE_OFF;
+    intensitate[i] = 0;
+    durata[i] = 1000;
+    timpStart[i] = millis();
+  }
+
+  Serial.println("Introdu: nr_led,animatie,timp_in_ms");
+}
+
+void loop() {
+  citesteComanda();
+  actualizeazaAnimatii();
+  actualizeazaPWM();
+}
+
+void citesteComanda() {
+  while (Serial.available() > 0) {
+    char c = Serial.read();
+
+    if (c == '\n') {
+      buffer[indexBuffer] = '\0';
+
+      if (indexBuffer > 0) {
+        proceseazaComanda(buffer);
+      }
+
+      indexBuffer = 0;
+    }
+    else if (c != '\r' && indexBuffer < sizeof(buffer) - 1) {
+      buffer[indexBuffer++] = c;
+    }
+  }
+}
+
+void proceseazaComanda(char *linie) {
+  char *primaVirgula = strchr(linie, ',');
+
+  if (primaVirgula == NULL) {
+    Serial.println("Format invalid!");
+    return;
+  }
+
+  *primaVirgula = '\0';
+  char *numeAnimatie = primaVirgula + 1;
+
+  char *aDouaVirgula = strchr(numeAnimatie, ',');
+
+  if (aDouaVirgula == NULL) {
+    Serial.println("Format invalid!");
+    return;
+  }
+
+  *aDouaVirgula = '\0';
+  char *timpText = aDouaVirgula + 1;
+
+  int pin = atoi(linie);
+  long timp = atol(timpText);
+
+  if (pin < 8 || pin > 13 || timp < 1) {
+    Serial.println("Pin sau durata invalida!");
+    return;
+  }
+
+  int i = pin - PRIMUL_PIN;
+  Animatie modNou;
+
+  if (strcmp(numeAnimatie, "off") == 0) {
+    modNou = MODE_OFF;
+  }
+  else if (strcmp(numeAnimatie, "fadein") == 0) {
+    modNou = FADE_IN;
+  }
+  else if (strcmp(numeAnimatie, "fadeout") == 0) {
+    modNou = FADE_OUT;
+  }
+  else if (strcmp(numeAnimatie, "fadeinout") == 0) {
+    modNou = FADE_IN_OUT;
+  }
+  else if (strcmp(numeAnimatie, "blink") == 0) {
+    modNou = BLINK;
+  }
+  else {
+    Serial.println("Animatie necunoscuta!");
+    return;
+  }
+
+  animatie[i] = modNou;
+  durata[i] = (unsigned long)timp;
+  timpStart[i] = millis();
+
+  switch (modNou) {
+    case MODE_OFF:
+      intensitate[i] = 0;
+      break;
+
+    case FADE_IN:
+      intensitate[i] = 0;
+      break;
+
+    case FADE_OUT:
+      intensitate[i] = 255;
+      break;
+
+    case FADE_IN_OUT:
+      intensitate[i] = 0;
+      break;
+
+    case BLINK:
+      intensitate[i] = 255;
+      break;
+  }
+
+  Serial.print("LED ");
+  Serial.print(pin);
+  Serial.print(": ");
+  Serial.println(numeAnimatie);
+}
+
+void actualizeazaAnimatii() {
+  unsigned long acum = millis();
+
+  for (int i = 0; i < NR_LEDURI; i++) {
+    unsigned long trecut = acum - timpStart[i];
+
+    switch (animatie[i]) {
+      case MODE_OFF:
+        intensitate[i] = 0;
+        break;
+
+      case FADE_IN: {
+        unsigned long pozitie = trecut % durata[i];
+        intensitate[i] =
+            pozitie * 255UL / durata[i];
+        break;
+      }
+
+      case FADE_OUT: {
+        unsigned long pozitie = trecut % durata[i];
+        intensitate[i] =
+            255 - pozitie * 255UL / durata[i];
+        break;
+      }
+
+      case FADE_IN_OUT: {
+        unsigned long jumatate = durata[i] / 2;
+        unsigned long pozitie = trecut % durata[i];
+
+        if (pozitie < jumatate) {
+          intensitate[i] =
+              pozitie * 255UL / jumatate;
+        } else {
+          unsigned long coborare = pozitie - jumatate;
+          unsigned long durataCoborare =
+              durata[i] - jumatate;
+
+          intensitate[i] =
+              255 - coborare * 255UL / durataCoborare;
+        }
+        break;
+      }
+
+      case BLINK:
+        intensitate[i] =
+            (trecut % durata[i] < durata[i] / 2)
+            ? 255 : 0;
+        break;
+    }
+  }
+}
+
+void actualizeazaPWM() {
+  unsigned long acum = micros();
+
+  if (acum - ultimulTickPWM < INTERVAL_PWM) {
+    return;
+  }
+
+  ultimulTickPWM = acum;
+  fazaPWM++;
+
+  for (int i = 0; i < NR_LEDURI; i++) {
+    int pin = PRIMUL_PIN + i;
+
+    if (fazaPWM == 0 && intensitate[i] > 0) {
+      digitalWrite(pin, HIGH);
+    }
+
+    if (fazaPWM == intensitate[i]) {
+      digitalWrite(pin, LOW);
+    }
+  }
+}
