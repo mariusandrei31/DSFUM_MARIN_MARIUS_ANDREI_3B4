@@ -1,0 +1,67 @@
+
+#define SOL_DIEZ3 208
+#define LA_DIEZ3 233
+
+#define RE_DIEZ4 311
+#define MI_DIEZ4 349
+#define FA4 349
+#define FA_DIEZ4 370
+#define SOL_DIEZ4 415
+#define LA_DIEZ4 466
+#define SI4 494
+
+#define DO_DIEZ5 554
+#define RE_DIEZ5 622
+#define FA5 698
+
+int note[] = {
+  SOL_DIEZ3, 8, RE_DIEZ4, 12, FA4, 4, FA_DIEZ4, 8,
+  SOL_DIEZ4, 8, LA_DIEZ4, 16, RE_DIEZ4, 8, RE_DIEZ4, 8,
+  SI4, 12, LA_DIEZ4, 4, SOL_DIEZ4, 8, SOL_DIEZ4, 8,
+  DO_DIEZ5, 12, SI4, 4, LA_DIEZ4, 8, SOL_DIEZ4, 8,
+  RE_DIEZ5, 12, DO_DIEZ5, 4, SI4, 4, LA_DIEZ4, 8,
+  SOL_DIEZ4, 8, LA_DIEZ4, 8, FA_DIEZ4, 16, SOL_DIEZ4, 8,
+  RE_DIEZ4, 12, FA4, 4, SOL_DIEZ4, 8, LA_DIEZ4, 8,
+  SI4, 8, LA_DIEZ4, 4, SOL_DIEZ4, 4, FA_DIEZ4, 8,
+  SOL_DIEZ4, 8, RE_DIEZ4, 24, RE_DIEZ4, 8, RE_DIEZ4, 4,
+  FA5, 2, FA5, 2, FA5, 8, FA5, 16,
+  RE_DIEZ5, 8, RE_DIEZ5, 8, FA5, 12, RE_DIEZ5, 4,
+  DO_DIEZ5, 4, SI4, 8, LA_DIEZ4, 8, DO_DIEZ5, 12,
+  SI4, 4, LA_DIEZ4, 8, LA_DIEZ4, 8, FA5, 12,
+  RE_DIEZ5, 4, DO_DIEZ5, 4, SI4, 8, LA_DIEZ4, 8,
+  LA_DIEZ4, 8, SOL_DIEZ4, 16, LA_DIEZ4, 8, LA_DIEZ4, 12,
+  SOL_DIEZ4, 4, FA_DIEZ4, 8, MI_DIEZ4, 8, RE_DIEZ4, 12,
+  MI_DIEZ4, 4, FA_DIEZ4, 4, SOL_DIEZ4, 8, LA_DIEZ4, 8,
+  SOL_DIEZ4, 4, FA_DIEZ4, 4, MI_DIEZ4, 8, FA_DIEZ4, 8,
+  RE_DIEZ4, 24, RE_DIEZ4, 8, RE_DIEZ4, 12, FA5, 4,
+  FA5, 4, FA5, 8, FA5, 16, RE_DIEZ5, 8,
+  RE_DIEZ5, 8, FA5, 12, RE_DIEZ5, 4, DO_DIEZ5, 4,
+  SI4, 8, LA_DIEZ4, 8, DO_DIEZ5, 12, SI4, 4,
+  LA_DIEZ4, 8, SOL_DIEZ4, 8, RE_DIEZ5, 12, DO_DIEZ5, 4,
+  SI4, 4, LA_DIEZ4, 4, SOL_DIEZ4, 8, LA_DIEZ4, 8,
+  FA_DIEZ4, 16, SOL_DIEZ4, 8, LA_DIEZ4, 12, SOL_DIEZ4, 4,
+  FA_DIEZ4, 8, MI_DIEZ4, 8, RE_DIEZ4, 12, MI_DIEZ4, 4,
+  FA_DIEZ4, 4, SOL_DIEZ4, 8, LA_DIEZ4, 8, SOL_DIEZ4, 4,
+  FA_DIEZ4, 4, MI_DIEZ4, 8, FA_DIEZ4, 8, RE_DIEZ4, 24,
+  LA_DIEZ3, 8, RE_DIEZ4, 24
+};
+
+int pauza_intre_note = 20;
+
+void setup() {
+  for (int nota_curenta = 0;
+       nota_curenta < sizeof(note) / sizeof(note[0]) / 2;
+       nota_curenta++) {
+
+    tone(3, note[nota_curenta * 2],
+         60 * note[nota_curenta * 2 + 1]);
+
+    delay(60 * note[nota_curenta * 2 + 1]
+          + pauza_intre_note);
+
+    noTone(3);
+  }
+}
+
+void loop() {
+}
