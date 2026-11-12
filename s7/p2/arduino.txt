@@ -1,0 +1,219 @@
+#include <SPI.h>
+#include <SD.h>
+#include <TMRpcm.h>
+
+#define SD_CS 4
+#define AUDIO_PIN 9
+#define MAX_SONGS 50
+
+TMRpcm audio;
+
+String playlist[MAX_SONGS];
+int songCount = 0;
+int currentSong = -1;
+
+bool randomMode = false;
+bool playing = false;
+
+String input;
+
+bool isWAV(String name) {
+  name.toLowerCase();
+  return name.endsWith(".wav");
+}
+
+void scanDirectory(File dir, String path) {
+  File entry;
+
+  while ((entry = dir.openNextFile())) {
+    String name = String(entry.name());
+
+    String fullPath = path;
+    if (!fullPath.endsWith("/")) fullPath += "/";
+    fullPath += name;
+
+    if (entry.isDirectory()) {
+      scanDirectory(entry, fullPath);
+    } else if (isWAV(name) && songCount < MAX_SONGS) {
+      playlist[songCount++] = fullPath;
+      Serial.println(fullPath);
+    }
+
+    entry.close();
+  }
+}
+
+void makePlaylist() {
+  songCount = 0;
+
+  File root = SD.open("/");
+  scanDirectory(root, "");
+  root.close();
+
+  Serial.print("Playlist creat. Melodii gasite: ");
+  Serial.println(songCount);
+
+  currentSong = -1;
+}
+
+void listPlaylist() {
+  Serial.println("Playlist:");
+
+  for (int i = 0; i < songCount; i++) {
+    Serial.print(i + 1);
+    Serial.print(". ");
+    Serial.println(playlist[i]);
+  }
+}
+
+void playSong(int index) {
+  if (songCount == 0) {
+    Serial.println("Playlist gol!");
+    playing = false;
+    return;
+  }
+
+  if (index < 0 || index >= songCount) {
+    Serial.println("Index invalid!");
+    return;
+  }
+
+  currentSong = index;
+
+  audio.stopPlayback();
+
+  char filename[100];
+  playlist[currentSong].toCharArray(filename, sizeof(filename));
+
+  audio.play(filename);
+
+  playing = true;
+
+  Serial.print("Redare: ");
+  Serial.println(playlist[currentSong]);
+}
+
+void playNext() {
+  if (songCount == 0) return;
+
+  int next;
+
+  if (randomMode) {
+    if (songCount == 1) next = 0;
+    else {
+      do {
+        next = random(songCount);
+      } while (next == currentSong);
+    }
+  } else {
+    next = (currentSong + 1) % songCount;
+  }
+
+  playSong(next);
+}
+
+void playPrevious() {
+  if (songCount == 0) return;
+
+  int previous;
+
+  if (randomMode) {
+    if (songCount == 1) previous = 0;
+    else {
+      do {
+        previous = random(songCount);
+      } while (previous == currentSong);
+    }
+  } else {
+    previous = currentSong - 1;
+
+    if (previous < 0) {
+      previous = songCount - 1;
+    }
+  }
+
+  playSong(previous);
+}
+
+void executeCommand(String command) {
+  command.trim();
+  command.toUpperCase();
+
+  if (command == "MAKE") {
+    audio.stopPlayback();
+    playing = false;
+    makePlaylist();
+  }
+
+  else if (command == "PLAY 0") {
+    randomMode = false;
+    if (currentSong == -1) playSong(0);
+    else if (!audio.isPlaying()) playSong(currentSong);
+    else playing = true;
+  }
+
+  else if (command == "PLAY 1") {
+    randomMode = true;
+
+    if (currentSong == -1) {
+      playSong(random(songCount));
+    } else if (!audio.isPlaying()) {
+      playSong(currentSong);
+    } else {
+      playing = true;
+    }
+  }
+
+  else if (command == "STOP") {
+    audio.stopPlayback();
+    playing = false;
+    Serial.println("Redare oprita.");
+  }
+
+  else if (command == "NEXT") {
+    playNext();
+  }
+
+  else if (command == "PREV") {
+    playPrevious();
+  }
+
+  else if (command == "LIST") {
+    listPlaylist();
+  }
+
+  else {
+    Serial.println("Comanda necunoscuta!");
+  }
+}
+
+void setup() {
+  Serial.begin(9600);
+
+  audio.speakerPin = AUDIO_PIN;
+  audio.setVolume(5);
+
+  randomSeed(analogRead(A0));
+
+  Serial.println("Initializare card SD...");
+
+  if (!SD.begin(SD_CS)) {
+    Serial.println("Eroare SD!");
+    while (true) {}
+  }
+
+  Serial.println("Card SD OK!");
+  Serial.println("Comenzi: MAKE, PLAY 0, PLAY 1, STOP, NEXT, PREV, LIST");
+}
+
+void loop() {
+  if (Serial.available()) {
+    input = Serial.readStringUntil('\n');
+    executeCommand(input);
+  }
+
+  // Trecere automata la urmatoarea melodie.
+  if (playing && !audio.isPlaying()) {
+    playNext();
+  }
+}

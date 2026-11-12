@@ -1,0 +1,112 @@
+
+#include <LedControl.h>
+#include <stdint.h>
+
+#define DIN_PIN 7
+#define CS_PIN 6
+#define CLK_PIN 5
+
+LedControl display = LedControl(DIN_PIN, CLK_PIN, CS_PIN, 1);
+
+uint64_t initialState;
+uint64_t currentState;
+
+void setCell(uint64_t &state, int x, int y, bool alive) {
+  int position = y * 8 + x;
+
+  if (alive)
+    state |= (1ULL << position);
+  else
+    state &= ~(1ULL << position);
+}
+
+bool getCell(uint64_t state, int x, int y) {
+  int position = y * 8 + x;
+  return (state >> position) & 1ULL;
+}
+
+void displayMatrix(uint64_t state) {
+  for (int y = 0; y < 8; y++) {
+    for (int x = 0; x < 8; x++) {
+      display.setLed(0, y, x, getCell(state, x, y));
+    }
+  }
+}
+
+int countNeighbors(uint64_t state, int x, int y) {
+  int neighbors = 0;
+
+  for (int dy = -1; dy <= 1; dy++) {
+    for (int dx = -1; dx <= 1; dx++) {
+      if (dx == 0 && dy == 0)
+        continue;
+
+      int nx = x + dx;
+      int ny = y + dy;
+
+      if (nx >= 0 && nx < 8 && ny >= 0 && ny < 8) {
+        if (getCell(state, nx, ny))
+          neighbors++;
+      }
+    }
+  }
+
+  return neighbors;
+}
+
+uint64_t nextGeneration(uint64_t state) {
+  uint64_t next = 0;
+
+  for (int y = 0; y < 8; y++) {
+    for (int x = 0; x < 8; x++) {
+      int neighbors = countNeighbors(state, x, y);
+      bool alive = getCell(state, x, y);
+
+      if (alive && (neighbors == 2 || neighbors == 3))
+        setCell(next, x, y, true);
+
+      if (!alive && neighbors == 3)
+        setCell(next, x, y, true);
+    }
+  }
+
+  return next;
+}
+
+uint64_t createInitialState() {
+  uint64_t state = 0;
+
+  setCell(state, 1, 0, true);
+  setCell(state, 2, 1, true);
+  setCell(state, 0, 2, true);
+  setCell(state, 1, 2, true);
+  setCell(state, 2, 2, true);
+
+  return state;
+}
+
+void setup() {
+  display.shutdown(0, false);
+  display.setIntensity(0, 8);
+  display.clearDisplay(0);
+
+  initialState = createInitialState();
+  currentState = initialState;
+
+  displayMatrix(currentState);
+}
+
+void loop() {
+  delay(500);
+
+  uint64_t next = nextGeneration(currentState);
+
+  if (next == currentState) {
+    delay(1000);
+    currentState = initialState;
+    displayMatrix(currentState);
+  } else {
+    currentState = next;
+    displayMatrix(currentState);
+  }
+}

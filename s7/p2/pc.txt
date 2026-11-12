@@ -1,0 +1,87 @@
+import serial
+import serial.tools.list_ports
+import threading
+import time
+
+BAUD_RATE = 9600
+
+def show_ports():
+    ports = list(serial.tools.list_ports.comports())
+
+    for i, port in enumerate(ports):
+        print(f"{i + 1}. {port.device} - {port.description}")
+
+    return ports
+
+
+def read_serial(arduino):
+    while True:
+        try:
+            if arduino.in_waiting:
+                message = arduino.readline().decode(
+                    "utf-8", errors="replace"
+                ).strip()
+
+                if message:
+                    print("\nArduino:", message)
+        except:
+            break
+
+
+def main():
+    ports = show_ports()
+
+    if not ports:
+        print("Nu a fost gasit niciun port serial.")
+        return
+
+    try:
+        choice = int(input("Selectati portul: ")) - 1
+        port = ports[choice].device
+
+        arduino = serial.Serial(
+            port,
+            BAUD_RATE,
+            timeout=1
+        )
+
+        time.sleep(2)
+
+        print("\nConectat la Arduino!")
+        print("Comenzi disponibile:")
+        print("MAKE")
+        print("PLAY 0 - redare liniara")
+        print("PLAY 1 - redare aleatorie")
+        print("STOP")
+        print("NEXT")
+        print("PREV")
+        print("LIST")
+        print("EXIT")
+
+        reader = threading.Thread(
+            target=read_serial,
+            args=(arduino,),
+            daemon=True
+        )
+
+        reader.start()
+
+        while True:
+            command = input("\nComanda: ").strip()
+
+            if command.upper() == "EXIT":
+                break
+
+            arduino.write((command + "\n").encode("utf-8"))
+
+        arduino.close()
+
+    except (ValueError, IndexError):
+        print("Selectie invalida!")
+
+    except serial.SerialException as error:
+        print("Eroare seriala:", error)
+
+
+if __name__ == "__main__":
+    main()

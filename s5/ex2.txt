@@ -1,0 +1,62 @@
+
+#include <LedControl.h>
+#include <stdint.h>
+
+#define DIN_PIN 7
+#define CS_PIN 6
+#define CLK_PIN 5
+
+LedControl display = LedControl(DIN_PIN, CLK_PIN, CS_PIN, 1);
+
+uint64_t readImage(String data) {
+  uint64_t image = 0;
+
+  for (int i = 0; i < 16; i++) {
+    char c = data[i];
+
+    image <<= 4;
+
+    if (c >= '0' && c <= '9')
+      image |= c - '0';
+    else if (c >= 'a' && c <= 'f')
+      image |= c - 'a' + 10;
+    else if (c >= 'A' && c <= 'F')
+      image |= c - 'A' + 10;
+  }
+
+  return image;
+}
+
+void displayImage(uint64_t image) {
+  for (int i = 0; i < 8; i++) {
+    byte row = (image >> (i * 8)) & 0xFF;
+
+    for (int j = 0; j < 8; j++) {
+      display.setLed(0, i, j, bitRead(row, j));
+    }
+  }
+}
+
+void setup() {
+  Serial.begin(9600);
+
+  display.shutdown(0, false);
+  display.setIntensity(0, 8);
+  display.clearDisplay(0);
+
+  Serial.println("Introduceti o imagine HEX de 16 caractere:");
+}
+
+void loop() {
+  if (Serial.available()) {
+    String data = Serial.readStringUntil('\n');
+    data.trim();
+
+    if (data.length() == 16) {
+      uint64_t image = readImage(data);
+      displayImage(image);
+    } else {
+      Serial.println("Imagine invalida!");
+    }
+  }
+}

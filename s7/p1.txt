@@ -1,0 +1,375 @@
+#include <SPI.h>
+#include <SD.h>
+
+#define SD_CS 4
+
+String currentDir = "/";
+String input;
+
+String makePath(String path) {
+  String result;
+
+  if (path.startsWith("/")) result = path;
+  else result = currentDir + (currentDir == "/" ? "" : "/") + path;
+
+  String parts[20];
+  int count = 0;
+  int start = 0;
+
+  while (start < result.length()) {
+    int end = result.indexOf('/', start);
+    if (end == -1) end = result.length();
+
+    String part = result.substring(start, end);
+
+    if (part == "..") {
+      if (count > 0) count--;
+    } else if (part != "" && part != ".") {
+      if (count < 20) parts[count++] = part;
+    }
+
+    start = end + 1;
+  }
+
+  String normalized = "/";
+  for (int i = 0; i < count; i++) {
+    normalized += parts[i];
+    if (i < count - 1) normalized += "/";
+  }
+
+  return normalized;
+}
+
+void printBMP(File file) {
+  uint8_t header[54];
+
+  if (file.read(header, 54) != 54) {
+    Serial.println("BMP invalid!");
+    return;
+  }
+
+  uint32_t offset = *(uint32_t*)&header[10];
+  int32_t width = *(int32_t*)&header[18];
+  int32_t height = *(int32_t*)&header[22];
+  uint16_t bits = *(uint16_t*)&header[28];
+  uint32_t compression = *(uint32_t*)&header[30];
+
+  if (bits != 24 || compression != 0 || width <= 0 || height == 0) {
+    Serial.println("Este acceptat doar BMP necomprimat, 24-bit.");
+    return;
+  }
+
+  bool topDown = height < 0;
+  if (height < 0) height = -height;
+
+  uint32_t rowSize = (width * 3 + 3) & ~3;
+  const char shades[] = " .:-=+*#%@";
+
+  for (int y = 0; y < height; y++) {
+    uint32_t row = topDown
+      ? offset + (uint32_t)y * rowSize
+      : offset + (uint32_t)(height - 1 - y) * rowSize;
+
+    file.seek(row);
+
+    for (int x = 0; x < width; x++) {
+      uint8_t b = file.read();
+      uint8_t g = file.read();
+      uint8_t r = file.read();
+
+      int gray = (r * 30 + g * 59 + b * 11) / 100;
+      int index = map(gray, 0, 255, 9, 0);
+
+      Serial.print(shades[index]);
+    }
+
+    Serial.println();
+
+    // Sărim peste padding-ul de la sfârșitul liniei BMP.
+    file.seek(row + rowSize);
+  }
+}
+
+void commandLS(String path) {
+  File dir = SD.open(path);
+
+  if (!dir || !dir.isDirectory()) {
+    Serial.println("Director inexistent!");
+    return;
+  }
+
+  File entry;
+
+  while ((entry = dir.openNextFile())) {
+    Serial.print(entry.name());
+
+    if (entry.isDirectory()) Serial.print("/");
+    else {
+      Serial.print("  ");
+      Serial.print(entry.size());
+      Serial.print(" bytes");
+    }
+
+    Serial.println();
+    entry.close();
+  }
+
+  dir.close();
+}
+
+void commandCAT(String path) {
+  File file = SD.open(path, FILE_READ);
+
+  if (!file || file.isDirectory()) {
+    Serial.println("Fisier inexistent!");
+    return;
+  }
+
+  if (path.endsWith(".bmp") || path.endsWith(".BMP")) {
+    printBMP(file);
+  } else {
+    while (file.available()) {
+      Serial.write(file.read());
+    }
+    Serial.println();
+  }
+
+  file.close();
+}
+
+void commandMKDIR(String path) {
+  if (SD.mkdir(path)) Serial.println("Director creat.");
+  else Serial.println("Nu s-a putut crea directorul.");
+}
+
+void commandRMDIR(String path) {
+  if (path == "/") {
+    Serial.println("Nu poti sterge radacina.");
+    return;
+  }
+
+  if (SD.rmdir(path)) Serial.println("Director sters.");
+  else Serial.println("Director inexistent sau nevid.");
+}
+
+void commandECHO(String command) {
+  int separator = command.indexOf(" > ");
+
+  if (separator == -1) {
+    Serial.println("Sintaxa: echo text > fisier.txt");
+    return;
+  }
+
+  String content = command.substring(5, separator);
+  String path = makePath(command.substring(separator + 3));
+
+  content.trim();
+  path.trim();
+
+  File file = SD.open(path, FILE_WRITE);
+
+  if (!file) {
+    Serial.println("Nu s-a putut deschide fisierul.");
+    return;
+  }
+
+  file.println(content);
+  file.close();
+
+  Serial.println("Continut scris.");
+}
+
+void findRecursive(File dir, String filename, String path) {
+  File entry;
+
+  while ((entry = dir.openNextFile())) {
+    String name = String(entry.name());
+    String fullPath = path;
+
+    if (!fullPath.endsWith("/")) fullPath += "/";
+    fullPath += name;
+
+    if (name == filename) {
+      Serial.println(fullPath);
+    }
+
+    if (entry.isDirectory()) {
+      findRecursive(entry, filename, fullPath);
+    }
+
+    entry.close();
+  }
+}
+
+void commandFIND(String filename) {
+  File root = SD.open("/");
+  findRecursive(root, filename, "");
+  root.close();
+}
+
+void commandCP(String source, String destination) {
+  File inputFile = SD.open(source, FILE_READ);
+
+  if (!inputFile || inputFile.isDirectory()) {
+    Serial.println("Fisier sursa inexistent!");
+    return;
+  }
+
+  SD.remove(destination);
+
+  File outputFile = SD.open(destination, FILE_WRITE);
+
+  if (!outputFile) {
+    Serial.println("Nu s-a putut crea destinatia.");
+    inputFile.close();
+    return;
+  }
+
+  while (inputFile.available()) {
+    outputFile.write(inputFile.read());
+  }
+
+  inputFile.close();
+  outputFile.close();
+
+  Serial.println("Fisier copiat.");
+}
+
+uint8_t calculateCRC4(String path) {
+  File file = SD.open(path, FILE_READ);
+
+  if (!file || file.isDirectory()) {
+    Serial.println("Fisier inexistent!");
+    return 0;
+  }
+
+  // Polinom generator: x^4 + x^2 + x + 1 = 10111.
+  const uint8_t polynomial = 0b10011;
+  uint8_t crc = 0;
+
+  while (file.available()) {
+    uint8_t data = file.read();
+
+    for (int bit = 7; bit >= 0; bit--) {
+      uint8_t incoming = (data >> bit) & 1;
+      uint8_t top = (crc >> 3) & 1;
+
+      crc = ((crc << 1) | incoming) & 0x0F;
+
+      if (top) crc ^= (polynomial & 0x0F);
+    }
+  }
+
+  // Adăugăm cei 4 biți de zero necesari împărțirii CRC.
+  for (int i = 0; i < 4; i++) {
+    uint8_t top = (crc >> 3) & 1;
+    crc = (crc << 1) & 0x0F;
+
+    if (top) crc ^= (polynomial & 0x0F);
+  }
+
+  file.close();
+  return crc;
+}
+
+void executeCommand(String command) {
+  command.trim();
+
+  if (command == "") return;
+
+  if (command == "cd") {
+    Serial.println(currentDir);
+  }
+
+  else if (command.startsWith("cd ")) {
+    String path = makePath(command.substring(3));
+    File dir = SD.open(path);
+
+    if (dir && dir.isDirectory()) {
+      currentDir = path;
+      Serial.println(currentDir);
+    } else {
+      Serial.println("Director inexistent!");
+    }
+
+    dir.close();
+  }
+
+  else if (command.startsWith("mkdir ")) {
+    commandMKDIR(makePath(command.substring(6)));
+  }
+
+  else if (command.startsWith("rmdir ")) {
+    commandRMDIR(makePath(command.substring(6)));
+  }
+
+  else if (command == "ls") {
+    commandLS(currentDir);
+  }
+
+  else if (command.startsWith("cat ")) {
+    commandCAT(makePath(command.substring(4)));
+  }
+
+  else if (command.startsWith("echo ")) {
+    commandECHO(command);
+  }
+
+  else if (command.startsWith("find ")) {
+    String filename = command.substring(5);
+    filename.trim();
+    commandFIND(filename);
+  }
+
+  else if (command.startsWith("cp ")) {
+    int separator = command.indexOf(' ', 3);
+
+    if (separator == -1) {
+      Serial.println("Sintaxa: cp sursa destinatie");
+      return;
+    }
+
+    String source = makePath(command.substring(3, separator));
+    String destination = makePath(command.substring(separator + 1));
+
+    commandCP(source, destination);
+  }
+
+  else if (command.startsWith("CRC ")) {
+    String path = makePath(command.substring(4));
+    uint8_t crc = calculateCRC4(path);
+
+    Serial.print("CRC-4: ");
+    if (crc < 16) Serial.print("0");
+    Serial.println(crc, HEX);
+  }
+
+  else {
+    Serial.println("Comanda necunoscuta!");
+  }
+}
+
+void setup() {
+  Serial.begin(9600);
+
+  while (!Serial) {}
+
+  Serial.println("Initializare card SD...");
+
+  if (!SD.begin(SD_CS)) {
+    Serial.println("Eroare la initializarea cardului SD!");
+    while (true) {}
+  }
+
+  Serial.println("Card SD OK!");
+  Serial.println("CLI pornit. Introduceti o comanda:");
+}
+
+void loop() {
+  if (Serial.available()) {
+    input = Serial.readStringUntil('\n');
+    executeCommand(input);
+    Serial.print(currentDir);
+    Serial.print("> ");
+  }
+}
